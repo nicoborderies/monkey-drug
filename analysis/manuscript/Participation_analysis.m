@@ -1,9 +1,9 @@
-%% Choice_analysis
+%% Participation_analysis
 %   this script execute the following analysis:
-%    - display between-treatments comparisons of choices (HR/HE/ correct choice)
-%    - display between-treatments comparisons of choices dependance
+%    - display between-treatments comparisons of participation
+%    - display between-treatments comparisons of participation dependance
 %      to experimental factors 
-%    - glmm modeling of treatment effect on choice
+%    - glmm modeling of treatment effect on participation
 %    - between-treatments comparisons of glmm coefficients
 %    - model selection between different glmm models
 %
@@ -24,8 +24,8 @@
 %------------- BEGIN CODE --------------
 
 %% average effect
-
-   % variables
+     
+    % variables
 
 
     for isub = 1:nsub
@@ -39,22 +39,20 @@
         tab = sessiondata;
         session = tab.session_number(selection);
         treatment = tab.treatment(selection);
-        choice_HR = tab.accuracy_R(selection);
-        choice_LE = tab.accuracy_E(selection);
-        choice_HRLE = tab.accuracy_RE(selection);
-        choice_HRHE = tab.choice_HRHE(selection);
-        vary = [ choice_HR , choice_LE , choice_HRLE , choice_HRHE ] ;
+        participation = tab.participation_rate(selection);
+
+        vary = participation;
         
         % display
-        if isub==1; fig = figure; set(fig,'Name','choice'); end
+        if isub==1; fig = figure; set(fig,'Name','participation'); end
         subplot(1,nsub,isub);hold on ; clear h
         for it=1:3
             % inputs
-            x = [1:4];
+            x = [1];
             xx = x + (it-2)*0.25;
             indtrt = ismember(treatment,trtList(it));
-            y = nanmean(vary(indtrt,:));
-            z = sem(vary(indtrt,:));
+            y = nanmean(vary(indtrt));
+            z = sem(vary(indtrt));
             % plot
             [ h(it)  ] = barplot( xx ,y,z, col{it} );
             h(it).BarWidth = 0.25;
@@ -72,105 +70,30 @@
             legend([h(1) h(2) h(3)],trtList);
         end
         ax = gca;
-        ax.YLim = [0.3 1];
-        ax.TickLength = [0 0];
-        ax.XTick = x; 
-        ax.XTickLabel = {'HR(1D)','LE(1D)','HRLE(2D:congruent)','HRHE(2D:incongruent)'}; 
-        ax.XTickLabelRotation = 45; 
-
-        if isub==1 ; ylabel('choice (%)'); end
-        t = title(['monkey ' sub(1) ]); 
-        
-    end
-
-    % reformat
-    setFigProper('FontSize',20,'LineWidth',2);
-    
-%% option value
-%     factor = 'R';
-    factor = 'E';
-    trt2comp = [1 2];
-    ytext = 'choice = HE (%)';
-    ylimits = [0 0.5];
-
-    % variables
-        nbin = [ 4 , ntrt , maxSess ];
-
-
-    for isub = 1:nsub
-        
-        % select
-        sub = subjectList{isub};
-        selectSubject = ismember(data.subject, sub);   
-        selection = selectSubject & selectionChosen ;
-        
-        % variables
-        Y = nan(nbin);
-        
-        session = data.sessionNumber(selection);
-        treatment = data.treatment(selection);
-        
-        participation = selectionParticipate(selection);
-        choice = (data.sideChoice(selection)-1)*2-1;
-        dR = (round(data.deltaOrdinalReward(selection)));
-        choiceR = (sign(choice)==sign(dR));
-        dR = abs(dR);
-        dE = (round(data.deltaOrdinalEffort(selection)));
-        choiceE = (sign(choice)==sign(dE));
-        dE = abs(dE);
-        accuracy = (choiceR | choiceE) ; 
-            
-        % stats
-        [~,subtrt] = ismember(unique(treatment),trtList);
-        subsess = unique(session);
-        
-            % mean participation
-            if factor=='R'; varx = dR; vary = choiceR; 
-            else  varx = dE;  vary = choiceE;  end
-            ysub = tapply(vary,{varx,treatment,session},@nanmean);
-            Y(:,subtrt,subsess) =  ysub;
-            
-
-        % second-level stat
-         dim=3;
-         y = nanmean(Y,dim);
-         z = sem(Y,dim);
-        
-        % display
-        if isub==1; fig = figure; set(fig,'Name','choice'); end
-        subplot(1,nsub,isub);hold on ; clear h
-        for it=trt2comp
-            x = [2:nbin(1)];
-            xx = x ;
-            [~,~,h(it)] = errorscat( xx ,y(x,it), z(x,it),col{it});
-        end
-        
-        % legending
-        if isa(h,'matlab.graphics.Graphics') && isub==nsub
-            legend(trtList{trt2comp});
-        end
-        ax = gca;
-        if factor=='R';ax.YLim = [0.5 1];
-        elseif factor=='E';ax.YLim = [0 0.5];end
+%         ax.YLim = [0.3 1];
         ax.TickLength = [0 0];
         ax.XTick = []; 
-        if factor=='R'; xlabel(texlabel('abs(Delta R)'));
-        else            xlabel(texlabel('abs(Delta E)'));  end
-        if isub==1 ; 
-            if factor=='R'; ylabel('choice = HR (%)'); 
-            else            ylabel('choice = HE (%)');   end
-        end
+        if isub==1 ; ylabel('participation (%)'); end
+%         if isub==1 ; ylabel('participation (n° trials)'); end
+%         if isub==1 ; ylabel('correct (n° trials)'); end
+%         if isub==1 ; ylabel('session length (n° trials)'); end
+%         if isub==1 ; ylabel('participation duration (n° trials)'); end
+%         if isub==1 ; ylabel('omission duration (n° trials)'); end
         t = title(['monkey ' sub(1) ]); 
         
     end
 
     % reformat
     setFigProper('FontSize',20,'LineWidth',2);
-
     
-%% option value
+    
+%% effect of option value
+    factor = 'R';
+%     factor = 'E';
+%     factor = 'T';
+
     % variables
-        nbin = [ 6 , ntrt , maxSess ];
+        nbin = [ 7, ntrt , maxSess ];
 
 
     for isub = 1:nsub
@@ -178,53 +101,49 @@
         % select
         sub = subjectList{isub};
         selectSubject = ismember(data.subject, sub);   
-        selection = selectSubject & selectionChosen  & data.deltaOrdinalReward==0 & data.deltaOrdinalEffort~=0;
-        selection = selectSubject & selectionChosen ;
- 
-        
+        selection = selectSubject ;
+%         selection = selectSubject & ~selectionRepetition;
+
         % variables
         X = nan(nbin);
         Y = nan(nbin);
         session = data.session(selection);
         treatment = data.treatment(selection);
         
-        choice = (data.sideChoice(selection)-1)*2-1;
+        participation = selectionParticipate(selection);
+        sumE = round(data.ordinalEffortLeft(selection) + data.ordinalEffortRight(selection));
         sumR = round(data.ordinalRewardLeft(selection) + data.ordinalRewardRight(selection));
-        dE = (round(data.deltaOrdinalEffort(selection)));
-        choiceE = (sign(choice)==-sign(dE));
-        dE = abs(dE);
-        successRate = data.successRate(selection);
-        successRate2 = quantileranks(successRate,nbin(1));
-        successRate2(successRate2==0) = NaN;
-        nnt = data.normalizedTrialNumber(selection); 
-        nnt = quantileranks(nnt,nbin(1));
-
+        nt = data.trialNumber(selection);
+        nnt = data.normalizedTrialNumber(selection);
+        nnt = quantileranks(nnt,nbin(1));  
+        
         % stats
         [~,subtrt] = ismember(unique(treatment),trtList);
         [~,subsess] = ismember(unique(session),sessionList);
         
-        varx = nnt;  vary = choiceE;
-        xsub = tapply(varx,{varx,treatment,session},@nanmean);
-        ysub = tapply(vary,{varx,treatment,session},@nanmean);
-        X(:,subtrt,subsess) =  xsub;
-        Y(:,subtrt,subsess) =  ysub;
+            % mean participation
+            if factor=='R'; varx = sumR; varx2 = varx;
+            elseif factor=='E';  varx = sumE; varx2 = varx;
+            elseif factor=='T';  varx = nnt; varx2 = nt;
+            end
+            xsub = tapply(varx2,{varx,treatment,session},@nanmean);
+            ysub = tapply(participation,{varx,treatment,session},@nanmean);
+            X(:,subtrt,subsess) =  xsub;
+            Y(:,subtrt,subsess) =  ysub;
             
 
         % second-level stat
          dim=3;
-%          xlevel = unique(varx);
-         xlevel = nanmean(X,dim);
+         x = nanmean(X,dim);
          y = nanmean(Y,dim);
          z = sem(Y,dim);
         
         % display
-        if isub==1; fig = figure; set(fig,'Name','choice'); end
+        if isub==1; fig = figure; set(fig,'Name','participation'); end
         subplot(1,nsub,isub);hold on ; clear h
-        for it=1:3
-%         for it=1:2
-            x = [1:nbin(1)];
-            xx = xlevel(x) ;
-            [~,~,h(it)] = errorscat( xx ,y(x,it), z(x,it),col{it});
+%         for it=1:3
+        for it=1:2
+            [~,~,h(it)] = errorscat( x(:,it)  ,y(:,it), z(:,it),col{it});
         end
         
         % legending
@@ -232,15 +151,13 @@
             legend([h(1) h(2) h(3)],trtList);
         end
         ax = gca;
-%         ax.XLim = [0 max(xx)*(1.1)];
         ax.YLim = [0 1];
-%         ax.TickLength = [0 0];
-        ax.XTick = sort(xx(~isnan(xx))) ; 
-%         xlabel(texlabel('R_left + R_right'));
-        xlabel(texlabel('success rate (%)'));
-        if isub==1 ; 
-          ylabel('choice = min(E) (%)'); 
-        end
+        ax.TickLength = [0 0];
+        ax.XTick = []; 
+        if factor=='R'; xlabel(texlabel('R_left + R_right'));
+        elseif factor=='E'; xlabel(texlabel('E_left + E_right')); 
+        elseif factor=='T'; xlabel(texlabel('session progression (ntrial)'));  end
+        if isub==1 ; ylabel('participation (%)'); end
         t = title(['monkey ' sub(1) ]); 
         
     end
@@ -249,52 +166,101 @@
     setFigProper('FontSize',20,'LineWidth',2);
     
 %% GLMM models
- % variables
-     trt2comp = [2];
-     vartext = 'choice';
-     formula = ' choice ~ 1 + dR + dE + dR:ntrial + dE:ntrial + choice_t_1 ';
-     varnames = {'dR';'R2';'dE';'E2';'ntrial';'choice_t_1';'Rtot';'Etot';'choice'};
-     effectName = {texlabel('b_right'),'dR','dE','choice_t_1','dR*ntrial','dE*ntrial'};
-     nregressor = 6;
+% variables
+     trt2comp = [1 2];
+     vartext = 'participation';
+     formula = ' participation ~ 1 + sumR + sumE  + ntrial + part_t_1 ';
+     varnames = {'sumR';'R2';'sumE';'E2';'ntrial';'part_t_1';'Rtot';'Etot';'work_t';'pause_t';'cum_part';'participation'};
+     effectName = {texlabel('beta_0'),'sumR','sumE','ntrial','part_t_1'};
+     nregressor = 5;
+     fname= 'logit';  distname = 'binomial';
+     dataselect = 'selectSubject';
+     predictor_select = '[ sum_r, r2 , sum_e , e2 , nt , p_t*2-1 , rr , ee, work_t, pause_t,cum_part ];';
+
+
+     nfactor = numel(varnames)-1;
      nbin = [ nregressor , ntrt , maxSess ];
      nbin2 = [ nregressor ,ntrt,nsub ];
      ysub = nan(nbin);
      Y = nan(nbin2);
      Z = nan(nbin2);
      BETA = []; T = [];
-     data.([vartext '_prediction']) = nan(height(data),1);
 
+     data.([vartext '_prediction']) = nan(height(data),1);
+     
     for isub = 1:nsub
                 
          % select
         sub = subjectList{isub};
         selectSubject = ismember(data.subject, sub);   
-        selection = selectSubject & selectionChosen ;
-        
+        eval(['selection = ' dataselect ';']);
+
         % variables
         ysub = nan(nbin);
         session = data.sessionNumber(selection);
-        choice = data.sideChoice(selection)-1;   
+        participation = selectionParticipate(selection);
+        participation_prediction = data.participation_prediction(selection);
         treatment = data.treatment(selection);
         
         r1 = round(data.ordinalRewardLeft(selection));
         r2 = round(data.ordinalRewardRight(selection));
         sum_r = r1+r2;
-        dr = r2-r1;
+        max_r = max(r1,r2);
         e1 = round(data.ordinalEffortLeft(selection));
         e2 = round(data.ordinalEffortRight(selection));
         sum_e = e1+e2;
-        de = e2-e1;
+        min_e = min(e1,e2);
         nt = data.trialNumber(selection);
         nnt = data.normalizedTrialNumber(selection);
         ee =  data.cumulativeEffort(selection);
+        [b,~,stat] = glmfit(nnt,ee,'normal');
+        ee = stat.resid + b(1);
         rr =  data.cumulativeReward(selection);
-        % previousChoice
+        [b,~,stat] = glmfit(nnt,rr,'normal');
+        rr = stat.resid + b(1);
+        
+        choice = (data.sideChoice(selection)-1)*2-1;
+        sdR = (round(data.deltaOrdinalReward(selection)));
+        choiceR = (sign(choice)==sign(sdR));
+        dR = abs(sdR);
+        sdE = (round(data.deltaOrdinalEffort(selection)));
+        choiceE = (sign(choice)==sign(sdE));
+        dE = abs(sdE);
+        r1 = round(data.ordinalRewardLeft(selection));
+        r2 = round(data.ordinalRewardRight(selection));
+        e1 = round(data.ordinalEffortLeft(selection));
+        e2 = round(data.ordinalEffortRight(selection));
+        sum_r = r1+r2;
+        sum_e = e1+e2;
+        congruency = double(sign(sdR)==-sign(sdE)) ;
+        dimensionality = (sdR~=0) + (sdE~=0) ;
+        congruency(dimensionality~=2)=1;
+        offertime = data.offerTime(selection);
+        offertimebin = quantileranks(offertime,nbin(1)); 
+        
+        responsetime = data.responseTime(selection)+eps;
+        cum_part = nan(size(participation));
+        
+        % previousParticipation
         tmax=1;
-        choice_t = nan(numel(choice),tmax);
+        p_t = nan(numel(participation),tmax);
         for it=1:tmax
-            choice_t(1+it:end,it) = choice(1:end-it);
-            choice_t(nt<=it,it) = NaN;
+            p_t(1+it:end,it) = participation(1:end-it);
+            p_t(nt<=it,it) = NaN;
+        end
+        
+        cumul = data.stateDuration(selection);
+        cumul(participation==0) = 0;
+        cumul2 = data.stateDuration(selection);
+        cumul2(participation==1) = 0;
+        tmax=1;
+        work_t = nan(numel(cumul),tmax);
+        pause_t = nan(numel(cumul),tmax);
+        for it=1:tmax
+            work_t(1+it:end,it) = cumul(1:end-it);
+            work_t(nt<=it,it) = NaN;
+            pause_t(1+it:end,it) = cumul2(1:end-it);
+            pause_t(nt<=it,it) = NaN;
         end
         
         % stats
@@ -302,26 +268,21 @@
         subsess = unique(session);
 
         for is = subsess'
+            cum_part(session==(is)) = cumsum(participation(session==(is)));
             
-            itrt = double(unique(treatment(session==is)));
-            predictor = [ dr, r2 , de , e2 , nt , choice_t*2-1 , rr , ee ];
+            itrt = double(unique(treatment(session==(is))));
+            eval(['predictor = ' predictor_select]);
             predictor = (predictor(session==(is),:));
             predictor = nanzscore(predictor);
-            y = choice(session==(is));
+            eval(['y = ' vartext '(session==is);']);
             stat = fitglm(predictor,y,...
-                           formula,'VarNames',varnames,'Distribution','binomial','link','logit');
+                           formula,'VarNames',varnames,'Distribution',distname,'link',fname);
             coef = stat.Coefficients;
             disp(coef);
             ysub(:,itrt,is) = coef.Estimate;
             data.([vartext '_prediction'])(selection & data.sessionNumber==is) = stat.Fitted.LinearPredictor;
-
-            %             x = [ predictor(:,[1:4 6]) , predictor(:,1).*predictor(:,5) , predictor(:,3).*predictor(:,5) ];
-%             [B,fit] = lasso(x,y);
-%             Y(1,itrt,is) = fit.Intercept(1);
-%             Y(2:end,itrt,is) =  B(:,1);
-
-            
         end
+
            
         % second-level stat
          dim=3;
@@ -331,9 +292,9 @@
          z = sem(ysub,dim); Z(:,subtrt,isub) = z;
         
         % display
-        if isub==1; fig = figure; set(fig,'Name','glm_choice'); end
+        if isub==1; fig = figure; set(fig,'Name','glm_participation'); end
         subplot(nsub,1,isub);hold on ; clear h ; h = gobjects(ntrt,1);
-        for it=1:trt2comp
+        for it=trt2comp
             x = [1:nregressor];
             xx = x + (it-2)*0.25;
             [ h(it)  ] = barplot( xx ,y(:,it),z(:,it), col{it} );
@@ -358,8 +319,6 @@
         t = title(['monkey ' sub(1) ]); 
         
     end
-    
-    
 % group-display
     fig = figure; set(fig,'Name','glm_comp_group');
     hold on ; clear h; h = gobjects(ntrt,1);  dim=3;
@@ -403,25 +362,28 @@
 %         [p(i),F] = coefTest(model,contrast);
         % random-effect model
             % treatment effect
-%             predictor2 = table(predictor(:,1),predictor(:,2),predictor(:,3),subject,y,...
-%                  'VariableNames',{'clonidine','placebo','atomoxetine','subject',vartext});
-%             model2 = fitglme(predictor2,[ vartext ' ~ clonidine + atomoxetine + (clonidine|subject) + (atomoxetine|subject)']);
-%             disp(model2.Coefficients);
-            % average effect
-            predictor2 = table(subject,y,...
-                 'VariableNames',{'subject',vartext});
-            model2 = fitglme(predictor2,[ vartext ' ~ 1 + (1|subject)']);
-            [~,~,randomstat] = randomEffects(model2);
-            randomstat.Name = repmat(effectName(i),3,1) ;
+            predictor2 = table(predictor(:,1),predictor(:,2),predictor(:,3),subject,y,...
+                 'VariableNames',{'clonidine','placebo','atomoxetine','subject',vartext});
+            model2 = fitglme(predictor2,[ vartext ' ~ clonidine + atomoxetine + (clonidine|subject) + (atomoxetine|subject)']);
             disp(model2.Coefficients);
-            if i==1
-                coef = model2.Coefficients;
-                rcoef = randomstat;
-            else
-                coef = vertcat(coef,model2.Coefficients);
-                rcoef = vertcat(rcoef,randomstat);
-            end
-            p(i) = model2.Coefficients.pValue;
+%             [p(i),F] = coefTest(model2,contrast);
+            [p(i),F] = coefTest(model2,[0 1 0]);
+
+            % average effect
+%             predictor2 = table(subject,y,...
+%                  'VariableNames',{'subject',vartext});
+%             model2 = fitglme(predictor2,[ vartext ' ~ 1 + (1|subject)']);
+%             [~,~,randomstat] = randomEffects(model2);
+%             randomstat.Name = repmat(effectName(i),3,1) ;
+%             disp(model2.Coefficients);
+%             if i==1
+%                 coef = model2.Coefficients;
+%                 rcoef = randomstat;
+%             else
+%                 coef = vertcat(coef,model2.Coefficients);
+%                 rcoef = vertcat(rcoef,randomstat);
+%             end
+%             p(i) = model2.Coefficients.pValue;
         
     end
     coef.Name = effectName';
@@ -433,27 +395,30 @@
     xx = x + (trt2comp-2)*0.25; % select treatment
     
     [s] = sigstar( num2cell(xx),p);
-    [s] = sigstar( num2cell(xx),p);
     
     % reformat
-    setFigProper('FontSize',20,'LineWidth',2);    
+    setFigProper('FontSize',20,'LineWidth',2);  
     
 %% GLMM model selection
 % variables
      trt2comp = [2];
-     vartext = 'choice';
-     formula = ' choice ~ 1 + dR + dE + dR:ntrial + dE:ntrial + choice_t_1 ';
-     varnames = {'dR';'R2';'dE';'E2';'ntrial';'choice_t_1';'Rtot';'Etot';'choice'};
-     effectName = {texlabel('b_right'),'dR','dE','choice_t_1','dR*ntrial','dE*ntrial'};
-     nregressor = 6;
+     vartext = 'participation';
+     formula = ' participation ~ 1 + sumR + sumE  + ntrial + part_t_1 ';
+     varnames = {'sumR';'maxR';'R2';'sumE';'minE';'E2';'ntrial';'part_t_1';
+                'Rtot';'Etot';'work_t';'pause_t';'cum_part';'participation'};
+     effectName = {texlabel('beta_0'),'sumR','sumE','ntrial','part_t_1'};
+     nregressor = 5;
      fname= 'logit';  distname = 'binomial';
-     dataselect = 'selectSubject & selectionChosen';
-     predictor_list = {'dr';'r2';'de';'e2';'nt';
-                        'nt.*dr';'nt.*de';'choice_t';'rr';'ee';
-                        'dPsuccess'};
+     dataselect = 'selectSubject';
+%      predictor_select = '[ sum_r, max_r, r2 , sum_e , min_e, e2 , nt , p_t*2-1 , rr , ee, work_t, pause_t,cum_part, p_success , sum_psuccess ];';
+     predictor_list = {'sum_r','max_r','r2','sum_e','min_e',...
+                        'e2','nt','p_t*2-1','rr','ee',...
+                        'work_t','pause_t','cum_part','p_success','sum_psuccess'};
      npredictor = numel(predictor_list);
-     model_matrix = {[1 3 6 7 8] ; 
-                     [1 6 8 11 ]};
+     model_matrix = [1 4 7 8  ; 
+                     2 5 7 8 ;
+                     1 14 7 8 ;
+                     1 15 7 8];
      nmodel=size(model_matrix,1);
 
      nfactor = numel(varnames)-1;
@@ -476,39 +441,83 @@
         eval(['selection = ' dataselect ';']);
 
         % variables
-          ysub = nan(nbin);
+        ysub = nan(nbin);
         session = data.sessionNumber(selection);
-        choice = data.sideChoice(selection)-1;   
+        participation = selectionParticipate(selection);
+        participation_prediction = data.participation_prediction(selection);
         treatment = data.treatment(selection);
         
         r1 = round(data.ordinalRewardLeft(selection));
         r2 = round(data.ordinalRewardRight(selection));
         sum_r = r1+r2;
-        dr = r2-r1;
+        max_r = max(r1,r2);
         e1 = round(data.ordinalEffortLeft(selection));
         e2 = round(data.ordinalEffortRight(selection));
         sum_e = e1+e2;
-        de = e2-e1;
-        dPsuccess = data.successRate_right(selection)-data.successRate_left(selection);
+        min_e = min(e1,e2);
         nt = data.trialNumber(selection);
         nnt = data.normalizedTrialNumber(selection);
         ee =  data.cumulativeEffort(selection);
+        [b,~,stat] = glmfit(nnt,ee,'normal');
+        ee = stat.resid + b(1);
         rr =  data.cumulativeReward(selection);
-        % previousChoice
+        [b,~,stat] = glmfit(nnt,rr,'normal');
+        rr = stat.resid + b(1);
+        
+        choice = (data.sideChoice(selection)-1)*2-1;
+        sdR = (round(data.deltaOrdinalReward(selection)));
+        choiceR = (sign(choice)==sign(sdR));
+        dR = abs(sdR);
+        sdE = (round(data.deltaOrdinalEffort(selection)));
+        choiceE = (sign(choice)==sign(sdE));
+        dE = abs(sdE);
+        r1 = round(data.ordinalRewardLeft(selection));
+        r2 = round(data.ordinalRewardRight(selection));
+        e1 = round(data.ordinalEffortLeft(selection));
+        e2 = round(data.ordinalEffortRight(selection));
+        sum_r = r1+r2;
+        sum_e = e1+e2;
+        p_success = data.successRate(selection);
+        sum_psuccess = data.successRate_left(selection) + data.successRate_right(selection);
+        congruency = double(sign(sdR)==-sign(sdE)) ;
+        dimensionality = (sdR~=0) + (sdE~=0) ;
+        congruency(dimensionality~=2)=1;
+        offertime = data.offerTime(selection);
+        offertimebin = quantileranks(offertime,nbin(1)); 
+        
+        responsetime = data.responseTime(selection)+eps;
+        cum_part = nan(size(participation));
+        
+        % previousParticipation
         tmax=1;
-        choice_t = nan(numel(choice),tmax);
+        p_t = nan(numel(participation),tmax);
         for it=1:tmax
-            choice_t(1+it:end,it) = choice(1:end-it);
-            choice_t(nt<=it,it) = NaN;
+            p_t(1+it:end,it) = participation(1:end-it);
+            p_t(nt<=it,it) = NaN;
         end
         
+        cumul = data.stateDuration(selection);
+        cumul(participation==0) = 0;
+        cumul2 = data.stateDuration(selection);
+        cumul2(participation==1) = 0;
+        tmax=1;
+        work_t = nan(numel(cumul),tmax);
+        pause_t = nan(numel(cumul),tmax);
+        for it=1:tmax
+            work_t(1+it:end,it) = cumul(1:end-it);
+            work_t(nt<=it,it) = NaN;
+            pause_t(1+it:end,it) = cumul2(1:end-it);
+            pause_t(nt<=it,it) = NaN;
+        end
         
         % stats
         [~,subtrt] = ismember(unique(treatment),trtList);
         subsess = unique(session);
 
         subLPP = nan(numel(subsess),nmodel);
-        for is = subsess'            
+        for is = subsess'
+            cum_part(session==(is)) = cumsum(participation(session==(is)));
+            
             itrt = double(unique(treatment(session==(is))));
             predictor = [];
             for ip=1:npredictor
@@ -520,7 +529,7 @@
             
             
             for iM = 1:nmodel
-                inputs = [ ones(numel(y),1) , predictor(:,model_matrix{iM}) ];
+                inputs = [ ones(numel(y),1) , predictor(:,model_matrix(iM,:)) ];
                 [beta,L,posterior,out] = nanglm(inputs,y,'logit',1);
                  subLPP(is,iM) = L;
                  disp(L);
@@ -564,5 +573,7 @@ for isub=1:nsub
    end
 end
 fprintf('done\n');
+ 
     
+
 %------------- END OF CODE --------------
