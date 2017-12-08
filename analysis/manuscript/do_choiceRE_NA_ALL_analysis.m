@@ -474,13 +474,31 @@ Force_analysis;
 Responsetime_analysis;
     
 %% 5 ) Complete computational model (participation + choice + force)
+t_start = tic;
 
  % variables
      nparam = 11;
      nbin = [ nparam , ntrt , maxSess ];
      Y = nan(nbin);
+     posterior = struct;
+     output = struct;
+     SUB = [];
+     SESS = [];
+     T = [];
+     
+    model=struct;
+    model_posterior = cell(nsub*maxSess,1);
+    model_inversion = cell(nsub*maxSess,1);
+    model_parameters = nan(nsub*maxSess,nparam);
+    model_sub = nan(nsub*maxSess,1);
+    model_trt = nan(nsub*maxSess,1);
+    model_sess = nan(nsub*maxSess,1);
 
-    for isub = 1:nsub
+    iloop=0;
+    nsess=0;
+    nsubsess=0;
+    
+ for isub = 1:nsub
                 
          % select
         sub = subjectList{isub};
@@ -499,8 +517,7 @@ Responsetime_analysis;
         rt = data.responseTime(selection)+0.1;        
         log_rt = log(rt); 
         
-        side = data.sideChoice(selection)-1; 
-        side = side*2-1;
+        side = data.sideChoice(selection); 
         r1 = round(data.ordinalRewardLeft(selection));
         r2 = round(data.ordinalRewardRight(selection));
         sum_r = r1+r2;
@@ -527,12 +544,20 @@ Responsetime_analysis;
         % stats
         [~,subtrt] = ismember(unique(treatment),trtList);
         [~,subsess] = ismember(unique(session),sessionList);
-
-        for is = subsess'
+        nsess = nsess+nsubsess;
+        nsubsess = numel(subsess);
+        jlist = [1:nsubsess];
+        
+%         for j = jlist
+        parfor j = jlist
+            is = subsess(j);
+            iloop=iloop+1;
             
             % input/output
             input = ([ r1, r2 , e1 , e2 , nt , side , p_t*2-1, choice_t*2-1 , rr , ee ]);
-            input = nanzscore(input(session==sessionList(is),:))';
+            input(:,[3 4]) = input(:,[3 4])./4;
+            input(:,[5 9 10]) = input(:,[5 9 10])./range(input(:,[5 9 10]),1);
+            input = input(session==sessionList(is),:)';
             observation = ([ participation , choice , force , log_rt ]);
             observation = observation(session==sessionList(is),:)';
             
@@ -546,27 +571,29 @@ Responsetime_analysis;
                     'n_phi',nphi,...     % number of observation parameters
                     'p',4,...          % output (data) dimension
                     'n_t',size(observation,2));   % number of time samples or trials
+            options=struct;
             options.dim             = dim;
             
             % priors
             param = struct;
-            param.prior.mu =    [ 0.3 , -0.1  , 0.1 , 0.5 , 1 ,...
-                                  0.8 , 0 , 0.5 , ...
+            param.prior.mu =    [ 1 , 0  , 1 , 0 , 0 , 0 , ...
+                                  0 , 0 , ...
                                   0.2 ,...
                                   0 , 1 ];
-            param.prior.sigma = [ 1 , 1 , 1 , 1 , 1 , ...
-                                  1 , 1 , 1 , ...
+            param.prior.sigma = [ 1 , 0 , 1 , 0 , 1 , 1 , ...
+                                  1 , 1 , ...
                                   1 , ...
                                   0 , 0 ];
             param.type = repmat({'Phi'},1,dim.n_phi);
-            param.labels = {'kr','ks','ke','kf','k0',...
-                            'beta','bm','bp',...
+            param.labels = {'kr','ks','ke','kf','k0','kn',...
+                            'bm','bp',...
                             'se',...
                             't0','gamma'};
-            param.transform.direct = { @identity ,@identity ,@identity ,@identity ,@identity ,...
-                                       @safepos ,@identity,@identity ,...
+            param.transform.direct = { @identity ,@identity ,@identity ,@identity ,@identity ,@identity ,...
+                                       @identity,@identity ,...
                                        @safepos ,...
                                        @safepos ,@safepos};
+            inG=struct;
             inG.transform = param.transform.direct(ismember(param.type,'Phi'));
             opt = struct('display',0);
             [priors]  = setParam(param,opt);
@@ -587,7 +614,7 @@ Responsetime_analysis;
             options.priors          = priors;   % include priors in options structure
             options.inG             = inG;      % input structure (grid)
             options.dim             = dim;
-            options.DisplayWin      = 1;
+            options.DisplayWin      = 0;
             options.verbose         = 1;
             options.updateHP = 1 ;
             options.kernelSize = 1 ;
@@ -601,55 +628,162 @@ Responsetime_analysis;
             
             % fit
             [posterior,inversion] = VBA_NLStateSpaceModel(observation,input,[],g_fname,dim,options);
-            extract_model_output;
-            disp(output.parameters);
+%             extract_model_output;
+%             disp(output.parameters);
+            [param]  = getParam(param,posterior,opt);
+
             itrt = double(unique(treatment(session==sessionList(is))));
-            Y(:,itrt,is) = param.estimate;
+            model_posterior{j+nsess} = posterior;
+            model_inversion{j+nsess} = inversion;
+            model_parameters(j+nsess,:) = param.estimate;  
+            model_sub(j+nsess) = isub;
+            model_trt(j+nsess) = itrt;
+            model_sess(j+nsess) = is;
         end
            
-%         % second-level stat
-%          dim=3;
-%          y = nanmean(Y,dim);
-%          z = sem(Y,dim);
-%         
-%         % display
-%         if isub==1; fig = figure; set(fig,'Name','glm_participation'); end
-%         subplot(nsub,1,isub);hold on
-%         for it=1:3
-%             x = [1:nregressor];
-%             xx = x + (it-2)*0.25;
-%             [ h(it)  ] = barplot( xx ,y(:,it),z(:,it), col{it} );
-%             h(it).BarWidth = 0.25;
-%             
-% %             h = plotSpread(Y','distributionColors',col);
-% %             m = findobj('-property','MarkerFaceColor');
-% %             set(m,'MarkerSize',18);
-% %             xx = double(unique(sessionList));
-% %             h(it) = scatter(xx,Y(it,:),40,col{it},'filled');
-%             
-%         end
-%         
-%         % legending
-%         if isa(h,'matlab.graphics.Graphics') && isub==nsub
-%             legend([h(1) h(2) h(3)],trtList);
-%         end
-%         effectName = varnames(1:end-1);
-%         effectName = {'k_0', effectName{:}};
-%         ax = gca;
-% %         ax.YLim = [0.5 1];
-%         ax.TickLength = [0 0];
-%         ax.XTick = []; 
-%         ax.XTick = x;
-%         ax.XTickLabel = effectName(x);
-%         ax.XLim = [0 x(end)+1];
-%         ylabel('regression coefficients '); 
-%         t = title(['monkey ' sub(1) ]); 
-        
     end
 
-%     % reformat
-%     setFigProper('FontSize',20,'LineWidth',2);
 
+
+% save model results
+resultdir = 'B:\nicolas.borderies\projets\monkey_pharma_choice\results';
+cd(resultdir);
+date = clock; datename = [ num2str(date(3)) '_' num2str(date(2)) '_' num2str(date(1)) ];
+save(['monkey_drug_NA_model_unscaled_stat_' datename],'model_posterior','model_inversion','model_parameters','model_sess','model_sub','model_trt');
+
+t_elapsed = toc;
+
+
+%% format
+nparam = 9;
+iparam = [1:nparam];
+paramNames = param.labels(iparam);
+sub = model_sub(~isnan(model_sub));
+trt = model_trt(~isnan(model_sub));
+sess = model_sess(~isnan(model_sub));
+y = model_parameters(~isnan(model_sub),iparam) ;  
+
+bca = nan(size(sess));
+R2 = nan(size(sess));
+bca_participation = nan(size(sess));
+bca_choice = nan(size(sess));
+precision_force = nan(size(sess));
+
+data.predicted_participation = nan(size(data.sideChoice));
+data.predicted_choice = nan(size(data.sideChoice));
+data.predicted_force = nan(size(data.sideChoice));
+
+for isess=1:numel(sess)
+    % extract fit accuracy metrics
+   bca(isess) = model_inversion{isess}.fit.acc(1);
+   R2(isess) = model_inversion{isess}.fit.R2(2);   
+   
+   % R2
+   y_select = ~model_inversion{isess}.options.isYout(3,:);
+   y_hat =  model_inversion{isess}.suffStat.gx(3,y_select==1)';
+   y_obs =  model_inversion{isess}.y(3,y_select==1)';
+   rho = corr(y_hat,y_obs);
+   R2(isess) = rho^2;
+   
+   % BCA
+   % - participation
+   y_select = ~model_inversion{isess}.options.isYout(1,:);
+   y_hat =  model_inversion{isess}.suffStat.gx(1,y_select==1)';
+   y_obs =  model_inversion{isess}.y(1,y_select==1)';
+   bca_participation(isess) = mean([ mean(1-y_hat(y_obs==0)) , mean(y_hat(y_obs==1)) ]);
+   % - choice
+   y_select = ~model_inversion{isess}.options.isYout(2,:);
+   y_hat =  model_inversion{isess}.suffStat.gx(2,y_select==1)';
+   y_obs =  model_inversion{isess}.y(2,y_select==1)';
+   bca_choice(isess) = mean([ mean(1-y_hat(y_obs==0)) , mean(y_hat(y_obs==1)) ]);   
+   
+   % observation precision
+   precision_force(isess) = model_posterior{isess}.a_sigma/model_posterior{isess}.b_sigma;
+   
+   % complete model's predictions
+   subname = subjectList{sub(isess)};
+   selectSubject = ismember(data.subject, subname);   
+   session = data.session;
+   [~,subsess] = ismember(unique(session(selectSubject)),sessionList);
+   subsessList = sessionList(subsess);
+   ifirst = find(sub==sub(isess),1,'first');
+   session_name = subsessList(isess-ifirst+1);
+   selection = ( selectSubject & session==session_name);
+   
+   data.predicted_participation(selection) = model_inversion{isess}.suffStat.gx(1,:);
+   data.predicted_choice(selection) = model_inversion{isess}.suffStat.gx(2,:);
+   data.predicted_force(selection) = model_inversion{isess}.suffStat.gx(3,:);
+   
+end
+% y = [bca_participation,bca_choice,R2];
+% paramNames = {'accuracy (participation)','accuracy (choice)','R2(force)'};
+
+
+% display
+clear g;
+alpha=0.8;
+for ip = 1:size(y,2)
+    [i,j] = ind2sub([3 3],ip);
+    g(i,j) = gramm('x',sub,'y',y(:,ip),'color',trt);
+    g(i,j).set_color_options('map',vertcat(col{:}),'lightness',100);
+    g(i,j).set_order_options('color',[1 2 3]);
+    g(i,j).stat_summary('type','sem','geom',{'bar','black_errorbar'});
+%     g(i,j).stat_boxplot('width',0.9);
+    g(i,j).set_names('x','subjects','y',paramNames{ip},'color','treatment');
+    g(i,j).axe_property('XLim',[0 4]);
+%     g.draw;
+%     hold on;
+end
+g.draw;
+hold on;
+for ip = 1:size(y,2)
+    [i,j] = ind2sub([3 3],ip);
+    axes(g(i,j).facet_axes_handles);
+    set_all_properties('FontName','Arial Narrow','FontWeight','bold','FontSize',16,...
+                        'LineWidth',1.5,'FaceAlpha',alpha);
+end
+
+
+%% stats
+T = nominal(trtList(trt)');
+predictor = [];
+predictor = [predictor ,(T=='clonidine')];
+predictor = [predictor ,(T=='placebo')];
+predictor = [predictor , (T=='atomoxetine')];
+subject = nominal(subjectList(sub)');
+stat=struct;
+% trt2comp = [1 2];
+trt2comp = [2 3];
+contrast = [0 0 0]; contrast(trt2comp) = 1; contrast(2) = -1;
+stat.p = nan(1,nparam);    stat.F = nan(1,nparam);
+stat.pRFX = nan(3,nparam); stat.F_RFX = nan(3,nparam); 
+for ip = 1:nparam
+    if numel(unique(y(:,ip)))~=1
+        vartext = paramNames{ip};
+        predictor2 = table(predictor(:,1),predictor(:,2),predictor(:,3),subject,y(:,ip),...
+             'VariableNames',{'clonidine','placebo','atomoxetine','subject',vartext});
+        model = fitglme(predictor2,[ vartext '  ~ -1 + clonidine + placebo +  atomoxetine + ( -1 + clonidine + placebo +  atomoxetine | subject)']);
+        [p(ip),F(ip)] = coefTest(model,contrast);
+       [~,~,randomstat] = randomEffects(model);
+        randomstat.Name = repmat(paramNames(ip),3,1) ;
+        for isub=1:3
+            contrastsub = zeros(1,9);
+            contrastsub([1:3]+(isub-1)*3) = contrast;
+           [stat.pRFX(isub,ip),stat.F_RFX(isub,ip)] = coefTest(model,contrast,0,'REContrast',contrastsub);
+        end
+        disp(model.Coefficients);
+        [~,~,fixedstat] = fixedEffects(model);
+        nffx = numel(fixedstat.Estimate);
+        fixedstat.Name = repmat(paramNames(ip),nffx,1) ;
+        if ip==1
+            coef = fixedstat;
+            if exist('randomstat'); rcoef = randomstat;end
+        else
+            coef = vertcat(coef,fixedstat);
+            if exist('randomstat');rcoef = vertcat(rcoef,randomstat);end
+        end
+    end
+end
 
 %% 6) Ethogram
 
